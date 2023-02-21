@@ -1,12 +1,15 @@
 from kiwoom.kiwoom import *
 
 import sys
-from PyQt5.QtWidgets import *
+from PyQt5.QtWidgets import QApplication, QWidget
 
 class Ui_class():
     def __init__(self):
         print("Ui_class 입니다.")
 
         self.app = QApplication(sys.argv)
-
         Kiwoom()
+
+        self.app.exec_() # 종료
+
+
