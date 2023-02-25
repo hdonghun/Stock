@@ -9,7 +9,7 @@ class Ui_class():
         print("Ui_class 입니다.")
 
         self.app = QApplication(sys.argv)
-        Kiwoom()
+        self.kiwoom = Kiwoom()
 
         self.app.exec_() # 종료
 
