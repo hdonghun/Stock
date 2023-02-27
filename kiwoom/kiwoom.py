@@ -12,12 +12,23 @@ class Kiwoom(QAxWidget):
         self.login_event_loop = None
         self.detail_account_info_event_loop = None
         self.detail_account_info_event_loop_2 = None
+        self.detail_account_info_event_loop_2 = QEventLoop()
+
         # Event Loop 란 : 데이터를 처리하는 동안, 다른 작업을 할 수 있게 만드는 거.
         # Pyqt Evnet Loop : 데이터를 처리하는 동안, 다른 것들이 실해 되지 않게, block을 건다.
         ####################
 
         ####### 변수 모음
         self.account_num = None
+        ####################
+
+        ####### 계좌관련 변수
+        self.use_money = 0
+        self.use_money_percent = 0.5
+        ####################
+
+        ####### 변수 모음
+        self.account_stock_dict = {}
         ####################
 
 
@@ -71,15 +82,14 @@ class Kiwoom(QAxWidget):
         self.detail_account_info_event_loop = QEventLoop()
         self.detail_account_info_event_loop.exec_()
 
-    def detail_account_mystock(self, sPreNext="0"):
-        print("계좌평가 잔고내역 요청")
+    def detail_account_mystock(self, sPrevNext="0"):
+        print("계좌평가 잔고내역 요청하기 연속조회 %s" sPrevNext)
         self.dynamicCall("SetInputValue(String, String)", "계좌번호", self.account_num)  # 인적사항 기입
         self.dynamicCall("SetInputValue(String, String)", "비밀번호", "0000")
         self.dynamicCall("SetInputValue(String, String)", "비밀번호입력매체구분", "00")
         self.dynamicCall("SetInputValue(String, String)", "조회구분", "2")
-        self.dynamicCall("CommRqData(String, String, int, String)", "계좌평가잔고내역요청", "opw00018", sPreNext, "2000")
+        self.dynamicCall("CommRqData(String, String, int, String)", "계좌평가잔고내역요청", "opw00018", sPrevNext, "2000")
 
-        self.detail_account_info_event_loop_2 = QEventLoop()
         self.detail_account_info_event_loop_2.exec_()
 
     def trdata_slot(self, sScrNo, sRQName, sTrCode, sRecordName, sPrevNext):
@@ -96,6 +106,8 @@ class Kiwoom(QAxWidget):
             deposit = self.dynamicCall("GetCommDate(String, String, int, String)", sTrCode, sRQName, 0, "예수금") #데이터를 요청해서 받으면, 그것들이 데이터루프에 걸려있고, 그것을 저장소에서 꺼내와서 사용한다?
             print("예수금 %s" % type(deposit))
             print("예수금 형변환 %s" % int(deposit))
+            self.use_money = int(deposit) * self.use_money_percent
+            self.use_money = self.use_money / 4
 
             ok_deposit = self.dynamicCall("GetCommDate(String,String,int,String)", sTrCode, sRQName, 0, "출금가능금액") #데이터를 요청해서 받으면, 그것들이 데이터루프에 걸려있고, 그것을 저장소에서 꺼내와서 사용한다?
             print("출금가능금액 %s" % ok_deposit)
@@ -117,5 +129,55 @@ class Kiwoom(QAxWidget):
 
             print("총수익률(%%) : %s" % total_profit_loss_rate_result)
 
-            self.detail_account_info_event_loop_2.exit()
+            # GetRepeaetCnt == 멀티데이터 조회 용도, 키움Open Api에 TR목록에서 확인가능 , 총 20종목 조회가능 , 그 다음 페이지 20종목
+            rows = self.dynamicCall("GetRepeaetCnt(QString, QSting", sTrCode,sRQName)
+            cnt = 0
+            for i in range(rows): #가져올 데이터들 만들어주기
+                code = self.dynamicCall("GetCommData(QString, QString, int, QString", sTrCode, sRQName, i, "종목번호")
+                code = code.strip()[1:]
+
+                code_nm = self.dynamicCall("GetCommDate(QString, QString, int, QString)", sTrCode, sRQName, i, "종목명")
+                stock_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString", sTrCode, sRQName, i, "보유수량")
+                buy_price = self.dynamicCall("GetCommData(QString, QString, int, QString", sTrCode, sRQName, i, "매입가")
+                learn_rate = self.dynamicCall("GetCommData(QString, QString, int, QString", sTrCode, sRQName, i, "수익률(%)")
+                current_price = self.dynamicCall("GetCommData(QString, QString, int, QString", sTrCode, sRQName, i, "현재가")
+                total_chegual_price = self.dynamicCall("GetCommData(QString, QString, int, QString", sTrCode, sRQName, i, "매입금액")
+                possible_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString", sTrCode, sRQName, i, "매매가능수량")
+
+                # 딕셔너리에 아래서 가공한 데이터들을 저장하기
+                if code in self.account_stock_dict:
+                    pass
+                else:
+                    self.account_stock_dict.update({code:{}})
+
+                # 가져오는 데이터들 보기좋게, 깔끔하게 가져오기 위해서
+                code_nm = code_nm.strip()
+                stock_quantity = int(stock_quantity.strip())
+                buy_price = int(buy_price.strip())
+                learn_rate = float(learn_rate.strip())
+                current_price = int(current_price.strip())
+                total_chegual_price = int(total_chegual_price.strip())
+                possible_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "매매가능수량")
+
+                self.account_stock_dict[code].update({"종목명":code_nm})
+                self.account_stock_dict[code].update({"종목명":stock_quantity})
+                self.account_stock_dict[code].update({"종목명":buy_price})
+                self.account_stock_dict[code].update({"종목명":learn_rate})
+                self.account_stock_dict[code].update({"종목명":current_price})
+                self.account_stock_dict[code].update({"종목명":total_chegual_price})
+                self.account_stock_dict[code].update({"종목명":possible_quantity})
+
+                cnt += 1
+
+            print("계좌에 가지고 있는 종목 %s" % self.account_stock_dict)
+            print("계좌에 보유종목 카운트 %s" % cnt)
+
+            # 종목의 수가 20개가 넘어가면 sPrevNext가 "2"로 표시된다.
+            # 종목 20개당 페이지 수 의 표시 > sPrevNext
+            if sPrevNext == "2":
+                self.detail_account_mystock(sPrevNext="2")
+            else:
+                self.detail_account_info_event_loop_2.exit()
+
+
 
